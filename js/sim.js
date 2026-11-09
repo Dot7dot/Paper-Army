@@ -30,6 +30,9 @@ export class Battle {
     this.proj = [];
     this.events = [];
     this.over = false;
+    // 統計（單人關卡的任務用）：stats[隊伍].項目
+    const blank = () => ({ blocked: 0, thorn: 0, moss: 0, heal: 0, round: 0, shield: 0, guard: 0, wet: 0, bounce: 0, climb: 0, crater: 0, fizzle: 0, high: 0, fall: 0 });
+    this.stats = [blank(), blank()];
     this.result = null;
     this.rng = mulberry32(seed);
     let id = 1;
@@ -139,6 +142,7 @@ export class Battle {
     u.aim -= dt;
     u.scan -= dt;
     u.swing = Math.max(0, (u.swing || 0) - dt);
+    u.retreat = (u.retreat || 0) - dt;
 
     if (u.state === 'climb') {
       this.climb(u, dt);
@@ -186,9 +190,10 @@ export class Battle {
     u.y = r; u.vy = 0; u.vx = 0; u.ground = true;
     if (u.state === 'fall') u.state = 'walk';
     this.emit({ k: 'dust', x: u.x, y: r, n: u.drop ? 8 : 4 });
-    if (!u.drop && fall > FALL_SAFE) {
+    if (!u.drop && !u.d.climb && fall > FALL_SAFE) {
       this.damage(u, (fall - FALL_SAFE) * 1.5, null);
       this.say(u, '摔傷!', '#b04020', 1);
+      this.stats[u.team].fall++;
     }
     u.drop = false;
   }
@@ -200,6 +205,7 @@ export class Battle {
     const g = this.groundAt(col, fy, 1, 2, u.d.h);
     if (!g.wall && !g.drop) { // 爬到頂了
       u.x = col + 0.5; u.y = g.y; u.state = 'walk'; u.ground = true;
+      this.stats[u.team].climb++;
       return;
     }
     const ceiling = this.solid(Math.floor(u.x), Math.floor(u.y - u.d.h));
@@ -217,9 +223,12 @@ export class Battle {
     u.round = !!(under & (F.ROUND | F.MOSS));
     u.moss = !!(under & F.MOSS);
     u.wet = !!((T.flagAt(col, y - 1) | T.flagAt(col, y - 3)) & F.WATER);
+    if (u.wet && !u.wasWet) { u.wasWet = true; this.stats[u.team].wet++; }
 
     if (u.moss && u.hp < u.max) {
+      const before = u.hp;
       u.hp = Math.min(u.max, u.hp + 5 * dt);
+      this.stats[u.team].moss += u.hp - before;
       if (Math.floor(u.anim * 2) !== Math.floor((u.anim - dt) * 2)) this.emit({ k: 'heal', x: u.x, y: u.y - u.d.h - 3, v: 0 });
     }
 
@@ -227,16 +236,21 @@ export class Battle {
     let thorn = false;
     for (let dx = -1; dx <= 1 && !thorn; dx++) for (let dy = -1; dy <= 1; dy++) if (T.flagAt(col + dx, y + dy) & F.THORN) { thorn = true; break; }
     for (let k = 1; k <= 3 && !thorn; k++) {
-      for (let r = y - 1; r >= y - u.d.h / 2; r--) if (T.flagAt(col + u.face * k, r) & F.THORN) { thorn = true; break; }
+      for (let r = y - 1; r >= y - u.d.h; r--) if (T.flagAt(col + u.face * k, r) & F.THORN) { thorn = true; break; }
     }
+    u.thornNow = thorn;
     if (thorn) {
+      // 被扎到就記住：之後幾秒退開、不再往尖刺上撞
+      if (u.state !== 'shield' && u.type !== 'shield') u.retreat = 4;
       if (u.type === 'shield' && u.state !== 'shield') {
         u.state = 'shield';
+        this.stats[u.team].shield++;
         this.say(u, '立盾!', '#2a4', 99);
         this.emit({ k: 'dust', x: u.x + u.face * 3, y, n: 6 });
       }
       if (u.state !== 'shield') {
         u.thornAcc += 14 * dt;
+        this.stats[u.team].thorn += 14 * dt;
         u.hp -= 14 * dt;
         u.hitT = 0.1;
         if (u.thornAcc >= 7) {
@@ -255,6 +269,7 @@ export class Battle {
       if (m) {
         u.vy = -105; u.vx = u.face * 38; u.ground = false; u.minY = u.y; u.state = 'fall'; u.bounceCD = 0.5;
         this.emit({ k: 'boing', x: u.x, y });
+        this.stats[u.team].bounce++;
         this.say(u, '彈!', '#c33', 1);
       }
     }
@@ -283,7 +298,9 @@ export class Battle {
       }
       if (best) {
         const amt = d.heal * (u.moss ? 2 : 1);
+        const before = best.hp;
         best.hp = Math.min(best.max, best.hp + amt);
+        this.stats[u.team].heal += best.hp - before;
         u.cd = d.cd;
         this.emit({ k: 'heal', x: best.x, y: best.y - best.d.h - 3, v: Math.round(amt), from: [u.x, u.y - d.h] });
       }
@@ -307,7 +324,7 @@ export class Battle {
       if (u.state !== 'shield') u.state = 'fight';
       if (u.cd <= 0) {
         let atk = d.atk;
-        if (u.type === 'roller' && u.round) atk *= 2;
+        if (u.type === 'roller' && u.round) { atk *= 2; this.stats[u.team].round++; }
         this.damage(t, atk, u);
         u.cd = d.cd;
         u.swing = 0.2;
@@ -333,7 +350,12 @@ export class Battle {
   }
 
   walk(u, dt, foes) {
-    const d = u.d, dir = u.face;
+    const d = u.d;
+    let dir = u.face;
+    if (u.retreat > 0) {
+      if (!u.thornNow) { u.state = 'wait'; return; }
+      dir = -dir; // 往後退開尖刺
+    }
     // 前面有隊友在打架就排隊；敵人擋路就停下
     for (const a of this.units) {
       if (a === u || a.state === 'dead') continue;
@@ -355,6 +377,7 @@ export class Battle {
     if (g.wall || rate > maxRate + 0.02) {
       if (d.climb && u.climbCD <= 0 && !g.low) { u.state = 'climb'; this.say(u, '爬!', '#2a6', 3); return; }
       u.state = 'blocked';
+      if (!u.wasBlocked) { u.wasBlocked = true; this.stats[u.team].blocked++; }
       this.say(u, g.low ? '太矮了' : (rate === Infinity ? '是牆!' : '太陡了!'), '#666', 5);
       return;
     }
@@ -390,7 +413,7 @@ export class Battle {
         this.proj.push({ kind: d.lob ? 1 : 0, x: ox, y: oy, vx, vy, g: P.g, team: u.team, dmg, t: 0 });
         u.face = Math.sign(vx) || u.face;
         u.swing = 0.25;
-        if (adv > 15 && d.ranged) this.say(u, '居高臨下!', '#246', 6);
+        if (adv > 15 && d.ranged) { this.say(u, '居高臨下!', '#246', 6); this.stats[u.team].high++; }
         return true;
       }
     }
@@ -419,6 +442,7 @@ export class Battle {
         if (p.x < 0 || p.x >= GW || p.y >= GH || p.t > 5) { alive = false; break; }
         if (p.kind === 1 && (T.flagAt(p.x, p.y) & F.WATER)) {
           this.emit({ k: 'fizzle', x: p.x, y: p.y });
+          this.stats[p.team].fizzle++;
           alive = false; break;
         }
         for (const e of this.units) {
@@ -455,12 +479,15 @@ export class Battle {
       }
     }
     const cx = Math.round(p.x * 2) / 2, cy = Math.round(p.y * 2) / 2;
-    if (this.T.carve(cx, cy, BOMB.carve)) this.emit({ k: 'crater', x: cx, y: cy, r: BOMB.carve });
+    if (this.T.carve(cx, cy, BOMB.carve)) {
+      this.emit({ k: 'crater', x: cx, y: cy, r: BOMB.carve });
+      this.stats[p.team].crater++;
+    }
   }
 
   damage(t, amt, src) {
     if (t.state === 'dead') return;
-    if (t.state === 'shield') amt *= 0.3;
+    if (t.state === 'shield') { this.stats[t.team].guard += amt * 0.7; amt *= 0.3; }
     t.hp -= amt;
     t.hitT = 0.15;
     this.emit({ k: 'dmg', x: t.x, y: t.y - t.d.h - 2, v: Math.max(1, Math.round(amt)), c: t.team === 0 ? '#1d4fc4' : '#c4301d' });

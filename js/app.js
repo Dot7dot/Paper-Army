@@ -2,12 +2,12 @@ import { GW, GH, FLOOR, Terrain, prepareImage, strokesFromImage, overlay, encode
 import { UNITS, UNIT_TYPES, TERRAIN_HELP } from './units.js';
 import { Battle, DT, DURATION, unitsFromSnapshot, projFromSnapshot } from './sim.js';
 import { Renderer, TEAM, drawUnit, unitIcon, buildTerrainLayer } from './render.js';
-import { LEVELS } from './levels.js';
+import { LEVELS, CHAPTERS, taskDone, taskProgress } from './levels.js';
 import { Link, cleanCode } from './net.js';
 
 const $ = (id) => document.getElementById(id);
 const MAX_UNITS = 5;           // 雙人模式每人最多幾隻
-const PROGRESS_KEY = 'paper-army-progress-v1';
+const PROGRESS_KEY = 'paper-army-progress-v2';
 const nextFrame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
 
 const S = {
@@ -36,7 +36,10 @@ function toast(msg, ms = 2200) {
 function busy(on) { $('busy').hidden = !on; }
 
 function loadProgress() {
-  try { return JSON.parse(localStorage.getItem(PROGRESS_KEY)) || { stars: [] }; } catch { return { stars: [] }; }
+  let p = null;
+  try { p = JSON.parse(localStorage.getItem(PROGRESS_KEY)); } catch { /* 私密模式 */ }
+  p = p && typeof p === 'object' ? p : {};
+  return { stars: Array.isArray(p.stars) ? p.stars : [], seen: Array.isArray(p.seen) ? p.seen : [] };
 }
 function saveProgress(p) {
   try { localStorage.setItem(PROGRESS_KEY, JSON.stringify(p)); } catch { /* 私密模式 */ }
@@ -164,29 +167,54 @@ function stopHome() { cancelAnimationFrame(home.raf); }
 /* =========================================================
    關卡
    ========================================================= */
+const TERRAIN_NAME = Object.fromEntries(TERRAIN_HELP.map((t) => [t.key, t.name]));
+
+// 這一關新學到什麼（關卡列表、學習卡用）
+function learnText(L) {
+  const t = [];
+  if (L.teach?.unit) t.push(UNITS[L.teach.unit].name);
+  if (L.teach?.terrain) t.push(TERRAIN_NAME[L.teach.terrain]);
+  return t.join('、');
+}
+
 function openLevels() {
   S.mode = 'solo';
   const prog = loadProgress();
   const list = $('levelList');
   list.innerHTML = '';
-  LEVELS.forEach((L, i) => {
-    const unlocked = i === 0 || (prog.stars[i - 1] || 0) > 0;
-    const st = prog.stars[i] || 0;
-    const b = document.createElement('button');
-    b.className = 'level' + (unlocked ? '' : ' locked');
-    b.innerHTML = `<span class="num">第 ${i + 1} 關</span><span class="name">${L.name}</span>
-      <span class="meta">敵人 ${L.enemies.length} 隻・可派 ${L.slots} 隻</span>
-      <span class="lv-stars">${unlocked ? '★'.repeat(st) + '<span style="color:#d8d0bd">' + '★'.repeat(3 - st) + '</span>' : '🔒'}</span>`;
-    b.addEventListener('click', () => {
-      if (!unlocked) { toast('先通過前一關'); return; }
-      if (S.level !== i) S.place = [[], []];
-      S.level = i;
-      S.player = 0;
-      openDeploy();
-    });
-    list.appendChild(b);
+  const nextIdx = LEVELS.findIndex((L, i) => !(prog.stars[i] > 0));
+  CHAPTERS.forEach((C, ci) => {
+    const idx = LEVELS.map((L, i) => i).filter((i) => LEVELS[i].ch === ci);
+    const got = idx.reduce((a, i) => a + (prog.stars[i] || 0), 0);
+    const head = document.createElement('div');
+    head.className = 'chapter';
+    head.style.gridColumn = '1 / -1';
+    head.innerHTML = `<h3>${C.name}</h3><span>${C.desc}</span><span class="ch-stars">★ ${got} / ${idx.length * 3}</span>`;
+    list.appendChild(head);
+    for (const i of idx) {
+      const L = LEVELS[i];
+      const unlocked = i === 0 || (prog.stars[i - 1] || 0) > 0;
+      const st = prog.stars[i] || 0;
+      const learn = learnText(L);
+      const b = document.createElement('button');
+      b.className = 'level' + (unlocked ? '' : ' locked') + (i === nextIdx ? ' next' : '');
+      b.innerHTML = `<span class="num">第 ${i + 1} 關</span><span class="name">${L.name}</span>
+        ${learn ? `<span class="learn">新：${learn}</span>` : ''}
+        <span class="meta">敵人 ${L.enemies.length} 隻・可派 ${L.slots} 隻</span>
+        <span class="lv-stars">${unlocked ? '★'.repeat(st) + '<span style="color:#d8d0bd">' + '★'.repeat(3 - st) + '</span>' : '🔒'}</span>`;
+      b.addEventListener('click', () => {
+        if (!unlocked) { toast('先通過前一關'); return; }
+        if (S.level !== i) { S.place = [[], []]; S.lastStrokes = [null, null]; }
+        S.level = i;
+        S.player = 0;
+        openDeploy();
+      });
+      list.appendChild(b);
+    }
   });
   show('levels');
+  const nx = list.querySelector('.level.next');
+  if (nx) requestAnimationFrame(() => nx.scrollIntoView({ block: 'center' }));
 }
 backs.levels = () => show('home');
 
@@ -194,6 +222,9 @@ backs.levels = () => show('home');
    佈陣
    ========================================================= */
 let deployLayer = null;
+
+// 目前開放的地形機關（單人依關卡解鎖，雙人全部開放）
+function curMechs() { return S.mode === 'solo' ? LEVELS[S.level].mechs : null; }
 
 function deployLimit() { return S.mode === 'solo' ? LEVELS[S.level].slots : MAX_UNITS; }
 function deployRoster() { return S.mode === 'solo' ? LEVELS[S.level].roster : UNIT_TYPES; }
@@ -207,6 +238,8 @@ function openDeploy() {
     const L = LEVELS[S.level];
     title = `第 ${S.level + 1} 關・${L.name}`;
     hint = '💡 ' + L.hint;
+    const best = loadProgress().stars[S.level] || 0;
+    $('deployTask').innerHTML = `🎯 任務：${L.task.text} <small>（勝利 ★・完成任務 ★・全員存活 ★${best ? `，最佳 ${'★'.repeat(best)}` : ''}）</small>`;
   } else if (S.mode === 'local') {
     title = `玩家 ${team + 1} 佈陣`;
     hint = `你是<b class="t${team}">${TEAM[team].name}（${team ? '右邊' : '左邊'}）</b>。自由選兵，最多 ${MAX_UNITS} 隻。佈陣完再畫自己的地形，兩張圖會疊在一起。`;
@@ -216,13 +249,54 @@ function openDeploy() {
   }
   $('deployTitle').textContent = title;
   $('deployHint').innerHTML = hint;
+  $('deployTask').hidden = S.mode !== 'solo';
+  $('teachBtn').hidden = !(S.mode === 'solo' && LEVELS[S.level].teach);
+  $('teach').hidden = true;
   // 單人模式重玩時淡淡顯示上一張地形
   const ghost = S.mode === 'solo' && S.lastStrokes[0];
-  deployLayer = buildTerrainLayer(ghost ? new Terrain(S.lastStrokes[0]) : null, { ghost: true });
+  deployLayer = buildTerrainLayer(ghost ? new Terrain(S.lastStrokes[0], curMechs()) : null, { ghost: true });
   buildRoster();
   show('deploy');
   requestAnimationFrame(drawDeploy);
+  // 第一次進入這關：跳出學習卡
+  if (S.mode === 'solo' && LEVELS[S.level].teach) {
+    const prog = loadProgress();
+    if (!prog.seen.includes(S.level)) {
+      prog.seen.push(S.level);
+      saveProgress(prog);
+      showTeach();
+    }
+  }
 }
+
+function showTeach() {
+  const L = LEVELS[S.level];
+  const body = $('teachBody');
+  body.innerHTML = '';
+  if (L.teach.unit) {
+    const d = UNITS[L.teach.unit];
+    const el = document.createElement('div');
+    el.className = 'teach-item';
+    el.innerHTML = `<canvas></canvas><div><h4>新角色：${d.name}</h4><p>${d.trait}</p></div>`;
+    body.appendChild(el);
+    requestAnimationFrame(() => unitIcon(el.querySelector('canvas'), L.teach.unit, 0));
+  }
+  if (L.teach.terrain) {
+    const g = TERRAIN_HELP.find((t) => t.key === L.teach.terrain);
+    const el = document.createElement('div');
+    el.className = 'teach-item';
+    el.innerHTML = `<svg viewBox="0 0 64 46">${GUIDE_SVG[g.key]}</svg><div><h4>新地形：${g.name}</h4><p>${g.desc}</p></div>`;
+    body.appendChild(el);
+  }
+  const tip = document.createElement('p');
+  tip.className = 'small';
+  tip.style.margin = '0';
+  tip.textContent = '💡 ' + L.hint;
+  body.appendChild(tip);
+  $('teach').hidden = false;
+}
+$('teachOk').addEventListener('click', () => { $('teach').hidden = true; });
+$('teachBtn').addEventListener('click', showTeach);
 
 backs.deploy = () => {
   if (S.mode === 'solo') openLevels();
@@ -347,8 +421,9 @@ const GUIDE_SVG = {
   slope: '<path d="M2 44 H30 L36 6 H62 V44Z" fill="#d6cdb8" stroke="#23222a" stroke-width="2.5" stroke-linejoin="round"/><text x="14" y="34" font-size="16" font-weight="900" fill="#c2372a">!</text>',
 };
 
-function renderGuide(el) {
-  el.innerHTML = TERRAIN_HELP.map((g) => `<div class="g-item"><svg viewBox="0 0 64 46">${GUIDE_SVG[g.key]}</svg><div><h4>${g.name}</h4><p>${g.desc}</p></div></div>`).join('');
+function renderGuide(el, mechs = null) {
+  const ok = (g) => !mechs || g.key === 'line' || g.key === 'slope' || mechs.includes(g.key);
+  el.innerHTML = TERRAIN_HELP.filter(ok).map((g) => `<div class="g-item"><svg viewBox="0 0 64 46">${GUIDE_SVG[g.key]}</svg><div><h4>${g.name}</h4><p>${g.desc}</p></div></div>`).join('');
 }
 renderGuide($('terrainGuide'));
 renderGuide($('helpGuide'));
@@ -358,6 +433,11 @@ function openDraw() {
   $('drawTitle').textContent = S.mode === 'solo' ? '畫地形' : `玩家 ${p + 1} 畫地形`;
   if (S.mode === 'online') $('drawTitle').textContent = '畫你的地形';
   $('reuseBtn').hidden = !S.lastStrokes[p];
+  const mechs = curMechs();
+  renderGuide($('terrainGuide'), mechs);
+  const locked = mechs ? TERRAIN_HELP.filter((g) => !['line', 'slope'].includes(g.key) && !mechs.includes(g.key)) : [];
+  $('guideLocked').hidden = !locked.length;
+  $('guideLocked').textContent = `🔒 還沒學到：${locked.map((g) => g.name.split(' → ')[0]).join('、')}（之後的關卡會解鎖，現在畫了只是普通地面）`;
   show('draw');
 }
 backs.draw = () => openDeploy();
@@ -604,7 +684,7 @@ function updateStrokes() {
   const thr = Number($('thrRange').value) / 100;
   $('thrVal').textContent = $('thrRange').value;
   adj.strokes = strokesFromImage(adj.prep, thr);
-  const T = new Terrain(adj.strokes);
+  const T = new Terrain(adj.strokes, curMechs());
   preview.setTerrain(T);
   preview.draw([], [], 0);
   const f = T.summary();
@@ -663,7 +743,7 @@ backs.pass = () => { if (confirm('放棄這場對戰？')) show('home'); };
 const B = { R: new Renderer($('battleCanvas')), battle: null, T: null, units: [], proj: [], role: 'local', acc: 0, speed: 1, last: 0, raf: 0, ended: false, time: 0, pending: [], tick: 0, result: null };
 
 function startBattle(strokes, armies, seed, role) {
-  B.T = new Terrain(strokes);
+  B.T = new Terrain(strokes, role === 'local' ? curMechs() : null);
   B.role = role;
   B.battle = role === 'guest' ? null : new Battle(B.T, armies, seed);
   B.units = B.battle ? B.battle.units : [];
@@ -762,19 +842,33 @@ function showResult(res) {
   };
   const timeUp = res.time >= DURATION - 0.01;
   const why = timeUp ? '時間到！' : '';
+  $('resChecks').hidden = S.mode !== 'solo';
   if (S.mode === 'solo') {
+    const L = LEVELS[S.level];
     const win = res.winner === 0;
     title.textContent = win ? '勝利！' : res.winner === -1 ? '平手' : '落敗…';
     text.textContent = `${why}你剩下 ${a0} 隻，敵人剩下 ${a1} 隻。`;
+    const placed = S.place[0].length;
+    const stats = B.battle ? B.battle.stats : [{}, {}];
+    const task = taskDone(L.task, stats, res, B.T);
+    const checks = [
+      ['勝利', win, ''],
+      ['任務：' + L.task.text, win && task, taskProgress(L.task, stats, res, B.T)],
+      ['全員存活', win && a0 === placed, `${a0} / ${placed}`],
+    ];
+    $('resChecks').innerHTML = checks.map(([t, ok, p]) => `<li class="${ok ? '' : 'no'}"><b>${ok ? '★' : '☆'}</b><span>${t}</span><small>${p}</small></li>`).join('');
+    if (task && !win) $('resChecks').insertAdjacentHTML('beforeend', '<li class="no"><b></b><span>任務達成了，但要獲勝才算數！</span></li>');
     if (win) {
-      const placed = S.place[0].length;
-      const st = 1 + (a0 >= Math.ceil(placed / 2) ? 1 : 0) + (a0 === placed ? 1 : 0);
+      const st = checks.filter((c) => c[1]).length;
       stars.innerHTML = '★'.repeat(st) + `<span class="off">${'★'.repeat(3 - st)}</span>`;
       const prog = loadProgress();
       prog.stars[S.level] = Math.max(prog.stars[S.level] || 0, st);
       saveProgress(prog);
-      if (S.level + 1 < LEVELS.length) btn('下一關 ›', 'primary', () => { S.level++; S.place = [[], []]; S.lastStrokes = [null, null]; openDeploy(); });
-      else text.textContent += ' 全部關卡都過了，你是紙上名將！';
+      if (S.level + 1 < LEVELS.length) {
+        const N = LEVELS[S.level + 1];
+        const learn = learnText(N);
+        btn(learn ? `下一關：解鎖 ${learn} ›` : '下一關 ›', 'primary', () => { S.level++; S.place = [[], []]; S.lastStrokes = [null, null]; openDeploy(); });
+      } else text.textContent += ' 全部關卡都過了，你是紙上名將！';
     } else {
       text.textContent += ' 換個佈陣或地形再試試！';
     }

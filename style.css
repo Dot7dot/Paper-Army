@@ -218,6 +218,45 @@ input[type="text"], input:not([type]), input[inputmode] {
 .row input { flex: 2; }
 .status { font-weight: 700; min-height: 1.5em; line-height: 1.5; }
 
+/* ---------- 關卡章節 ---------- */
+.chapter { margin: 18px 0 8px; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.chapter:first-child { margin-top: 4px; }
+.chapter h3 { margin: 0; font-size: 17px; }
+.chapter span { font-size: 13px; color: var(--ink-soft); }
+.chapter .ch-stars { margin-left: auto; color: #c99a10; font-weight: 800; }
+.level .learn { font-size: 12px; font-weight: 700; color: #2f7a2f; }
+.level.next { background: #fff4cc; }
+
+/* ---------- 任務、學習卡 ---------- */
+.task-line {
+  border: 2px solid var(--ink); border-radius: 10px; background: #fff4cc;
+  padding: 7px 10px; font-size: 14px; font-weight: 700; margin-bottom: 10px;
+}
+.task-line small { font-weight: 400; color: var(--ink-soft); }
+.pill-btn { cursor: pointer; background: #e4f3dc; }
+.modal {
+  position: absolute; inset: 0; z-index: 20;
+  background: rgba(246, 241, 228, 0.85);
+  display: flex; align-items: center; justify-content: center; padding: 20px;
+  animation: fade 0.25s;
+}
+.modal-card {
+  background: var(--card); border: 2px solid var(--ink); border-radius: 16px; box-shadow: 6px 6px 0 var(--ink);
+  padding: 18px; width: min(100%, 400px); max-height: 100%; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 12px; animation: pop 0.35s cubic-bezier(.2, 1.6, .5, 1);
+}
+.teach-tag { align-self: flex-start; background: var(--ink); color: #fff; border-radius: 999px; padding: 3px 12px; font-weight: 800; font-size: 13px; }
+.teach-item { display: flex; gap: 12px; align-items: center; }
+.teach-item canvas { width: 64px; height: 64px; flex: none; }
+.teach-item svg { width: 72px; height: 52px; flex: none; }
+.teach-item h4 { margin: 0 0 2px; font-size: 18px; }
+.teach-item p { margin: 0; font-size: 14px; line-height: 1.5; }
+.checks { list-style: none; padding: 0; margin: 0 0 14px; text-align: left; font-size: 14px; line-height: 1.5; }
+.checks li { display: flex; gap: 8px; align-items: baseline; padding: 3px 0; }
+.checks li b { font-size: 17px; width: 20px; flex: none; text-align: center; color: #c99a10; }
+.checks li.no b { color: #c9c0aa; }
+.checks li small { color: var(--ink-soft); margin-left: auto; white-space: nowrap; }
+
 /* ---------- 佈陣 ---------- */
 .roster { display: grid; grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); gap: 8px; margin-top: 8px; }
 .unit-btn {
@@ -402,11 +441,12 @@ input[type="text"], input:not([type]), input[inputmode] {
   #deploy .body {
     display: grid;
     grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
-    grid-template-areas: "note note" "arena roster" "tip info";
+    grid-template-areas: "note note" "task task" "arena roster" "tip info";
     gap: 6px 14px;
     align-items: start;
   }
   #deploy #deployHint { grid-area: note; margin: 0; }
+  #deploy #deployTask { grid-area: task; margin: 0; }
   #deploy .arena { grid-area: arena; width: 100%; }
   #deploy .body > .small { grid-area: tip; margin: 0; }
   #deploy .roster { grid-area: roster; margin: 0; grid-template-columns: repeat(auto-fill, minmax(70px, 1fr)); }

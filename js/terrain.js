@@ -259,7 +259,9 @@ function components(mask, w, h, conn) {
 /* ---------------- 建立地形 ---------------- */
 
 export class Terrain {
-  constructor(strokes) {
+  // mechs：開放的地形機關（'round' 'moss' 'thorn' 'water' 'mush'），null = 全部開放
+  constructor(strokes, mechs = null) {
+    this.mechs = mechs ? new Set(mechs) : null;
     this.w = GW;
     this.h = GH;
     this.strokes = strokes;
@@ -269,6 +271,8 @@ export class Terrain {
   }
 
   idx(x, y) { return y * GW + x; }
+
+  has(k) { return !this.mechs || this.mechs.has(k); }
 
   // 地圖外：左右與下方是牆，上方是空的
   solidAt(x, y) {
@@ -329,8 +333,9 @@ export class Terrain {
     this.features = { circles: [], spikes: [], mushrooms: [], pools: 0, round: 0 };
 
     this.classifyShapes(line, inside);
-    this.findSpikes();
-    this.findRound();
+    this.surfaces();
+    if (this.has('thorn')) this.findSpikes();
+    if (this.has('round')) this.findRound();
     this.computeWater();
     this.version++;
   }
@@ -387,6 +392,7 @@ export class Terrain {
       // 小圓點：塗滿的小塊（不是空心的圈）、接近正方
       const side = Math.max(bw, bh);
       if (!s.closed && A <= 180 && side <= 16 && side / Math.min(bw, bh) <= 1.8 && A / (bw * bh) >= 0.5) {
+        if (!this.has('mush')) continue;
         for (const i of s.cells) this.flag[i] |= F.MUSH;
         this.features.mushrooms.push(box);
         continue;
@@ -405,11 +411,12 @@ export class Terrain {
       const mean = sum / nb;
       const cv = Math.sqrt(Math.max(0, sum2 / nb - mean * mean)) / mean;
       if (mean < 6 && Math.max(bw, bh) <= 16) { // 很小的圈圈也當成圓點
+        if (!this.has('mush')) continue;
         for (const i of s.cells) this.flag[i] |= F.MUSH;
         this.features.mushrooms.push(box);
         continue;
       }
-      if (cv < 0.095 && rmin / rmax > 0.7) {
+      if (cv < 0.095 && rmin / rmax > 0.7 && this.has('moss')) {
         this.features.circles.push({ ...box, r: mean });
         // 圓形上面（朝上的外緣）長青苔
         for (const i of s.cells) {
@@ -512,7 +519,7 @@ export class Terrain {
           for (let r = Math.min(prev, sy) - 1; r <= sy + 1; r++) { mark(xx - dir, r); mark(xx, r); }
           if (sy - prev < 1 && k > 4) { if (++flat >= 2) break; } else if (sy - prev >= 1) flat = 0;
           prev = sy;
-          if (sy - s.y > 34) break;
+          if (sy - s.y > 80) break;
         }
       }
     }
@@ -523,14 +530,34 @@ export class Terrain {
   findRound() {
     const W = GW, H = GH;
     const cols = this.cols;
-    const sm = (x, y) => {
+    const sm = (x, y, range) => {
       let s = 0, n = 0;
       for (let dx = -1; dx <= 1; dx++) {
-        const v = this.surfaceNear(x + dx, y, 10);
+        const v = this.surfaceNear(x + dx, y, range);
         if (v === null) return null;
         s += v; n++;
       }
       return s / n;
+    };
+    // 近（8 格）遠（14 格）兩種尺度量曲率：小圓丘和大而平緩的山丘都算
+    const SCALES = [[8, 1.6], [14, 2.0]];
+    const roundAt = (x, y) => {
+      const c = sm(x, y, 4);
+      if (c === null) return false;
+      for (const [S, need] of SCALES) {
+        const h = S >> 1, R = S + 4;
+        const a = sm(x - S, y, R), b = sm(x + S, y, R);
+        const a2 = sm(x - h, y, R), b2 = sm(x + h, y, R);
+        if (a === null || b === null || a2 === null || b2 === null) continue;
+        const curve = a + b - 2 * c;
+        const slope = Math.abs(b2 - a2) / S;
+        // 兩邊各自也要彎（避免「直線 + 一個轉角」被當成弧面）
+        const ca = a + c - 2 * a2, cb = b + c - 2 * b2;
+        if (Math.abs(curve) >= need && Math.abs(curve) <= 12 * S / 8 && slope < 1.6 &&
+          Math.sign(ca) === Math.sign(curve) && Math.sign(cb) === Math.sign(curve) &&
+          Math.abs(ca) >= 0.25 && Math.abs(cb) >= 0.25) return true;
+      }
+      return false;
     };
     let count = 0;
     for (let x = 9; x < W - 9; x++) {
@@ -538,19 +565,7 @@ export class Terrain {
         if (y >= H - FLOOR) continue;
         const i = y * W + x;
         if (this.flag[i] & (F.THORN | F.MUSH)) continue;
-        const a = sm(x - 8, y), b = sm(x + 8, y), c = sm(x, y);
-        const a2 = sm(x - 4, y), b2 = sm(x + 4, y);
-        if (a === null || b === null || c === null || a2 === null || b2 === null) continue;
-        const curve = a + b - 2 * c;
-        const slope = Math.abs(b2 - a2) / 8;
-        // 兩邊各自也要彎（避免「直線 + 一個轉角」被當成弧面）
-        const ca = a + c - 2 * a2, cb = b + c - 2 * b2;
-        if (Math.abs(curve) >= 1.6 && Math.abs(curve) <= 12 && slope < 1.6 &&
-          Math.sign(ca) === Math.sign(curve) && Math.sign(cb) === Math.sign(curve) &&
-          Math.abs(ca) >= 0.25 && Math.abs(cb) >= 0.25) {
-          this.flag[i] |= F.ROUND;
-          count++;
-        }
+        if (roundAt(x, y)) { this.flag[i] |= F.ROUND; count++; }
       }
     }
     // 把零星的點連成一段（左右 2 格內有圓滑面就算）
@@ -572,6 +587,7 @@ export class Terrain {
   computeWater() {
     const W = GW, H = GH, CAP = 10;
     for (let i = 0; i < this.flag.length; i++) this.flag[i] &= ~F.WATER;
+    if (!this.has('water')) { this.features.pools = 0; return; }
     const top = new Int32Array(W);
     for (let x = 0; x < W; x++) {
       let y = 0;
@@ -642,6 +658,17 @@ export class Terrain {
       this.version++;
     }
     return changed;
+  }
+
+  // 從桌面往上連續實心的最高高度（畫出來的山有多高）
+  maxHill() {
+    let best = 0;
+    for (let x = 0; x < GW; x++) {
+      let y = GH - FLOOR - 1, h = 0;
+      while (y >= 0 && this.solid[y * GW + x]) { y--; h++; }
+      best = Math.max(best, h);
+    }
+    return best;
   }
 
   summary() {
