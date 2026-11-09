@@ -60,15 +60,23 @@
 
 <!-- 佈陣 -->
 <section id="deploy" class="screen">
-  <header class="bar"><button class="back" aria-label="返回">‹</button><h2 id="deployTitle">佈陣</h2><span id="deploySlots" class="pill"></span></header>
+  <header class="bar"><button class="back" aria-label="返回">‹</button><h2 id="deployTitle">佈陣</h2><button id="teachBtn" class="pill pill-btn" hidden>學習卡</button><span id="deploySlots" class="pill"></span></header>
   <div class="body">
     <p id="deployHint" class="note"></p>
+    <div id="deployTask" class="task-line" hidden></div>
     <div class="arena"><canvas id="deployCanvas"></canvas></div>
     <p class="small">點自己那半邊放下選好的兵（只決定左右位置，開戰時從天而降）；點已放的兵可以收回。</p>
     <div id="roster" class="roster"></div>
     <div id="unitInfo" class="unit-info"></div>
   </div>
   <footer class="foot"><button class="btn" id="deployClear">清空</button><button class="btn primary" id="deployNext">下一步：畫地形 ›</button></footer>
+  <div id="teach" class="modal" hidden>
+    <div class="modal-card">
+      <div class="teach-tag">新解鎖！</div>
+      <div id="teachBody"></div>
+      <button class="btn primary" id="teachOk">了解！開始佈陣</button>
+    </div>
+  </div>
 </section>
 
 <!-- 畫地形 -->
@@ -77,6 +85,7 @@
   <div class="body">
     <p class="note">拿一張 A4 或任何淺色的紙<b>橫放</b>，用深色的筆畫出地形，再拍下來。紙的下緣是地面，線條碰到下緣，下面就會變成實心的山。</p>
     <div id="terrainGuide" class="guide"></div>
+    <p id="guideLocked" class="small" hidden></p>
   </div>
   <footer class="foot col">
     <button class="btn primary big" id="camBtn">拍照</button>
@@ -163,6 +172,7 @@
       <h2 id="resTitle"></h2>
       <div id="resStars" class="stars"></div>
       <p id="resText"></p>
+      <ul id="resChecks" class="checks" hidden></ul>
       <div id="resBtns" class="res-btns"></div>
     </div>
   </div>

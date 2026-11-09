@@ -24,8 +24,8 @@ export const UNITS = {
     role: '遠程', tip: '高處更強', trait: '站得比敵人高，射程和傷害都會提升；箭會被地形擋住。',
   },
   gecko: {
-    name: '壁虎', hp: 70, atk: 8, cd: 0.5, range: 7, speed: 20, slope: 89, h: 9, climb: true,
-    role: '突襲', tip: '爬牆', trait: '可以直接爬上垂直的牆，速度快但比較脆弱。',
+    name: '壁虎', hp: 80, atk: 8, cd: 0.5, range: 7, speed: 20, slope: 89, h: 9, climb: true,
+    role: '突襲', tip: '爬牆', trait: '可以直接爬上垂直的牆、爬下來也不會摔傷，速度快但比較脆弱。',
   },
   herb: {
     name: '草藥師', hp: 70, atk: 5, cd: 1.0, range: 7, speed: 12, slope: 45, h: 13, heal: 8,
