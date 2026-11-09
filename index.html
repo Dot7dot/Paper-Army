@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <title>紙上談兵 Paper Army</title>
+  <meta name="description" content="在紙上畫線，拍照變成戰場地形，小兵從天而降自動戰鬥。">
+  <meta name="theme-color" content="#f6f1e4">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-180.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@900&text=%E7%B4%99%E4%B8%8A%E8%AB%87%E5%85%B5%E5%8B%9D%E5%88%A9%E8%90%BD%E6%95%97%E5%B9%B3%E6%89%8B%E8%97%8D%E7%B4%85%E9%9A%8A%EF%BC%81%E2%80%A6&display=swap">
+  <link rel="stylesheet" href="style.css">
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js" defer></script>
+  <script type="module" src="js/app.js"></script>
+</head>
+<body>
+
+<!-- 首頁 -->
+<section id="home" class="screen on">
+  <div class="home-top">
+    <h1 class="logo">紙上談兵<small>PAPER ARMY</small></h1>
+    <p class="tagline">在紙上畫線，拍照變成戰場。<br>小兵從天而降，地形決定勝負！</p>
+  </div>
+  <div class="arena home-arena"><canvas id="homeCanvas"></canvas></div>
+  <div class="menu">
+    <button class="btn primary big" data-act="solo">單人闖關</button>
+    <button class="btn big" data-act="online">雙人連線</button>
+    <button class="btn" data-act="local">同一支手機對戰</button>
+    <button class="btn ghost" data-act="help">兵種與地形說明</button>
+  </div>
+</section>
+
+<!-- 關卡選擇 -->
+<section id="levels" class="screen">
+  <header class="bar"><button class="back" aria-label="返回">‹</button><h2>單人闖關</h2></header>
+  <div class="body"><div id="levelList" class="level-list"></div></div>
+</section>
+
+<!-- 連線大廳 -->
+<section id="lobby" class="screen">
+  <header class="bar"><button class="back" aria-label="返回">‹</button><h2>雙人連線</h2></header>
+  <div class="body">
+    <p class="note">兩個人用自己的手機打開這個網頁，輸入同一組密碼就能連線。建立房間的人是<b class="t0">藍隊（左邊）</b>，加入的人是<b class="t1">紅隊（右邊）</b>。</p>
+    <div class="card">
+      <h3>建立房間</h3>
+      <div class="row"><input id="hostCode" inputmode="numeric" maxlength="12" placeholder="密碼" autocomplete="off"><button class="btn primary" id="hostBtn">建立</button></div>
+    </div>
+    <div class="card">
+      <h3>加入房間</h3>
+      <div class="row"><input id="joinCode" inputmode="numeric" maxlength="12" placeholder="輸入對手的密碼" autocomplete="off"><button class="btn primary" id="joinBtn">加入</button></div>
+    </div>
+    <p id="lobbyStatus" class="status"></p>
+  </div>
+</section>
+
+<!-- 佈陣 -->
+<section id="deploy" class="screen">
+  <header class="bar"><button class="back" aria-label="返回">‹</button><h2 id="deployTitle">佈陣</h2><span id="deploySlots" class="pill"></span></header>
+  <div class="body">
+    <p id="deployHint" class="note"></p>
+    <div class="arena"><canvas id="deployCanvas"></canvas></div>
+    <p class="small">點自己那半邊放下選好的兵（只決定左右位置，開戰時從天而降）；點已放的兵可以收回。</p>
+    <div id="roster" class="roster"></div>
+    <div id="unitInfo" class="unit-info"></div>
+  </div>
+  <footer class="foot"><button class="btn" id="deployClear">清空</button><button class="btn primary" id="deployNext">下一步：畫地形 ›</button></footer>
+</section>
+
+<!-- 畫地形 -->
+<section id="draw" class="screen">
+  <header class="bar"><button class="back" aria-label="返回">‹</button><h2 id="drawTitle">畫地形</h2></header>
+  <div class="body">
+    <p class="note">拿一張 A4 或任何淺色的紙<b>橫放</b>，用深色的筆畫出地形，再拍下來。紙的下緣是地面，線條碰到下緣，下面就會變成實心的山。</p>
+    <div id="terrainGuide" class="guide"></div>
+  </div>
+  <footer class="foot col">
+    <button class="btn primary big" id="camBtn">拍照</button>
+    <div class="row">
+      <button class="btn" id="pickBtn">從相簿選</button>
+      <button class="btn" id="fingerBtn">用手指畫</button>
+    </div>
+    <button class="btn ghost" id="reuseBtn" hidden>沿用上一張地形</button>
+  </footer>
+  <input type="file" id="camInput" accept="image/*" capture="environment" hidden>
+  <input type="file" id="pickInput" accept="image/*" hidden>
+</section>
+
+<!-- 手指畫 -->
+<section id="finger" class="screen">
+  <header class="bar"><button class="back" aria-label="返回">‹</button><h2>用手指畫地形</h2></header>
+  <div class="body">
+    <div class="arena paper-edge"><canvas id="fingerCanvas"></canvas></div>
+    <p class="small">畫的時候想像這是一張橫放的紙：下緣是地面。</p>
+  </div>
+  <footer class="foot">
+    <button class="btn" id="fingerUndo">復原</button>
+    <button class="btn" id="fingerPen">粗筆</button>
+    <button class="btn" id="fingerClear">清空</button>
+    <button class="btn primary" id="fingerDone">完成 ›</button>
+  </footer>
+</section>
+
+<!-- 調整（剪裁、閾值、預覽） -->
+<section id="adjust" class="screen">
+  <header class="bar"><button class="back" aria-label="返回">‹</button><h2>確認地形</h2></header>
+  <div class="body">
+    <div id="cropWrap" class="crop-wrap"><canvas id="cropCanvas"></canvas></div>
+    <div class="adjust-tools">
+      <button class="btn small-btn" id="rotBtn" aria-label="旋轉">↻ 旋轉</button>
+      <label class="slider">
+        <span>深色閾值 <b id="thrVal"></b></span>
+        <input type="range" id="thrRange" min="5" max="90" value="35">
+        <span class="ends"><i>淡線也算</i><i>只認深色</i></span>
+      </label>
+    </div>
+    <p class="small">拖曳框框四角只留下紙張；調整閾值讓地形剛好是你畫的線。</p>
+    <div class="arena"><canvas id="previewCanvas"></canvas></div>
+    <div id="featList" class="feat-list"></div>
+  </div>
+  <footer class="foot"><button class="btn" id="retakeBtn">重拍</button><button class="btn primary" id="adjustOk">開戰！</button></footer>
+</section>
+
+<!-- 交換手機 -->
+<section id="pass" class="screen center">
+  <div class="pass-card">
+    <h2>玩家 1 完成！</h2>
+    <p>請把手機交給 <b class="t1">玩家 2（紅隊）</b>。<br>兩張地形會疊在一起變成戰場。</p>
+    <button class="btn primary big" id="passBtn">我是玩家 2，開始佈陣</button>
+  </div>
+</section>
+
+<!-- 等待對手 -->
+<section id="wait" class="screen center">
+  <div class="pass-card">
+    <div class="spinner"></div>
+    <h2>等待對手…</h2>
+    <p id="waitMsg">對手還在佈陣或畫地形。</p>
+    <button class="btn ghost" id="waitCancel">離開房間</button>
+  </div>
+</section>
+
+<!-- 戰鬥 -->
+<section id="battle" class="screen battle-screen">
+  <div class="hud">
+    <span class="side t0"><i class="dot"></i>藍隊 <b id="cnt0">0</b></span>
+    <span id="timer" class="timer">60</span>
+    <span class="side t1">紅隊 <b id="cnt1">0</b><i class="dot"></i></span>
+  </div>
+  <div class="arena battle-arena"><canvas id="battleCanvas"></canvas></div>
+  <p class="rotate-hint">↻ 把手機橫放，戰場會更大</p>
+  <div class="battle-bar">
+    <button class="btn small-btn" id="speedBtn">速度 ×1</button>
+    <span id="battleNote" class="small"></span>
+    <button class="btn small-btn ghost" id="quitBtn">離開</button>
+  </div>
+  <div id="result" class="result" hidden>
+    <div class="result-card">
+      <h2 id="resTitle"></h2>
+      <div id="resStars" class="stars"></div>
+      <p id="resText"></p>
+      <div id="resBtns" class="res-btns"></div>
+    </div>
+  </div>
+</section>
+
+<!-- 說明 -->
+<section id="help" class="screen">
+  <header class="bar"><button class="back" aria-label="返回">‹</button><h2>兵種與地形</h2></header>
+  <div class="body">
+    <h3 class="sec">兵種</h3>
+    <div id="codex" class="codex"></div>
+    <h3 class="sec">地形機關</h3>
+    <div id="helpGuide" class="guide"></div>
+    <h3 class="sec">規則</h3>
+    <ul class="rules">
+      <li>畫地形之前先決定兵要放在哪裡，開戰時一起從天而降，從左右兩邊出發。</li>
+      <li>士兵自動戰鬥，60 秒後結束，剩下比較多兵的一方獲勝。</li>
+      <li>單人模式是闖關制；雙人模式自由選兵，每人最多 5 隻。</li>
+      <li>雙人模式兩人各畫一張圖，疊在一起變成戰場。</li>
+    </ul>
+  </div>
+</section>
+
+<div id="busy" class="busy" hidden><div class="spinner"></div></div>
+<div id="toast" class="toast"></div>
+</body>
+</html>
