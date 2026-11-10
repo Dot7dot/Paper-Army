@@ -99,6 +99,44 @@ function soloGuide(id, step, title, description, goal = '', status = '') {
   if (goal) { const g = document.createElement('div'); g.className = 'subgoal'; g.textContent = `🎯 本關任務：${goal}`; el.appendChild(g); }
   if (status) { const st = document.createElement('div'); st.className = 'guide-status'; st.setAttribute('role', 'status'); st.textContent = status; el.appendChild(st); }
 }
+
+const spotSeen=new Set();let spotSteps=[],spotIndex=0,spotTarget=null;
+const spotPlans={
+ deploy:[['roster','① 選擇士兵','點選一張士兵卡片，先決定要派哪一種士兵。'],['deployCanvas','② 放置士兵','點戰場左半邊的藍色區域放下士兵。虛線就是從天而降的水平位置。'],['deployNext','③ 前往畫圖','至少放一隻士兵，再按這裡進入畫地形。']],
+ draw:[['terrainGuide','① 認識地形','地形會影響士兵的移動。第一次先畫簡單的斜坡就好。'],['fingerBtn','② 選擇畫圖方式','按「用手指畫」直接開始，也可以拍照或從相簿選擇。']],
+ finger:[['fingerCanvas','① 先看士兵落點','藍色箭頭是我軍、紅色箭頭是敵軍的降落水平位置。參考這些位置安排山坡。'],['fingerDone','② 完成地形','在畫布上畫好線條，再按「完成」確認辨識結果。']],
+ adjust:[['previewCanvas','① 預覽戰場','檢查畫出的線條有沒有變成地形；箭頭也會提示士兵降落的位置。'],['adjustOk','② 準備開戰','確認辨識正常，再按這裡開戰；空白地形必須先修正。']]
+};
+function spotClose(){ $('soloSpotlight').hidden=true;if(spotTarget)spotTarget.classList.remove('spot-target');spotTarget=null; }
+function spotStep(){
+ if(spotIndex>=spotSteps.length||S.mode!=='solo'){spotClose();return;}
+ if(spotTarget)spotTarget.classList.remove('spot-target');
+ const [id,title,desc]=spotSteps[spotIndex];spotTarget=$(id);
+ if(!spotTarget){spotIndex++;spotStep();return;}
+ spotTarget.classList.add('spot-target');
+ $('spotCount').textContent='引導 '+(spotIndex+1)+' / '+spotSteps.length;
+ $('spotTitle').textContent=title;$('spotText').textContent=desc;
+ $('spotNext').textContent=spotIndex===spotSteps.length-1?'了解 ✓':'下一步 ›';
+ $('soloSpotlight').hidden=false;
+ spotTarget.scrollIntoView({block:'nearest',behavior:'instant'});
+}
+function spotStart(stage){
+ spotClose();const key=S.level+':'+stage;
+ if(S.mode!=='solo'||spotSeen.has(key))return;
+ spotSeen.add(key);spotSteps=spotPlans[stage]||[];spotIndex=0;
+ if(spotSteps.length)requestAnimationFrame(spotStep);
+}
+$('spotNext').addEventListener('click',()=>{spotIndex++;spotStep()});
+$('spotSkip').addEventListener('click',spotClose);
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('soloSpotlight').hidden)spotClose()});
+function drawDropMarkers(ctx){
+ if(S.mode!=='solo')return;
+ const mark=(list,color,name)=>{
+  list.forEach((p,i)=>{const x=p.x*GW;ctx.save();ctx.strokeStyle=color;ctx.fillStyle=color;ctx.globalAlpha=.86;ctx.lineWidth=.85;ctx.setLineDash([2,2]);ctx.beginPath();ctx.moveTo(x,4);ctx.lineTo(x,GH-FLOOR-3);ctx.stroke();ctx.setLineDash([]);ctx.beginPath();ctx.moveTo(x-2.5,11);ctx.lineTo(x+2.5,11);ctx.lineTo(x,15);ctx.closePath();ctx.fill();ctx.font='bold 3.3px sans-serif';ctx.textAlign='center';ctx.fillText(name+(i+1),x,7);ctx.restore()});
+ };
+ mark(S.place[0],'#174bc1','我');mark(LEVELS[S.level].enemies,'#c32625','敵');
+}
+
 function soloDeployUpdate() {
   if (S.mode !== 'solo') return;
   const L = LEVELS[S.level], count = S.place[0].length;
@@ -120,7 +158,7 @@ function soloCloseIntro() {
   if (wasOpen && pendingTeachLevel === S.level && cur === 'deploy') {
     pendingTeachLevel = -1;
     showTeach();
-  }
+  } else if (wasOpen && cur === 'deploy') spotStart('deploy');
 }
 $('soloIntroOk').addEventListener('click', soloCloseIntro);
 $('soloIntroSkip').addEventListener('click', soloCloseIntro);
@@ -129,6 +167,7 @@ function show(id) {
   const prev = cur;
   cur = id;
   document.querySelectorAll('.screen').forEach((s) => s.classList.toggle('on', s.id === id));
+  if (prev !== id) spotClose();
   if (prev === 'home' && id !== 'home') stopHome();
   if (id === 'home' && prev !== 'home') startHome();
   if (prev === 'battle' && id !== 'battle') stopBattle();
@@ -319,6 +358,7 @@ function openDeploy() {
       } else showTeach();
     }
   }
+  if (S.mode === 'solo' && $('soloIntro').hidden && $('teach').hidden) spotStart('deploy');
 }
 
 function showTeach() {
@@ -347,7 +387,7 @@ function showTeach() {
   body.appendChild(tip);
   $('teach').hidden = false;
 }
-$('teachOk').addEventListener('click', () => { $('teach').hidden = true; });
+$('teachOk').addEventListener('click', () => { $('teach').hidden = true; if (S.mode === 'solo') spotStart('deploy'); });
 $('teachBtn').addEventListener('click', showTeach);
 
 backs.deploy = () => {
@@ -495,6 +535,7 @@ function openDraw() {
   $('guideLocked').hidden = !locked.length;
   $('guideLocked').textContent = `🔒 還沒學到：${locked.map((g) => g.name.split(' → ')[0]).join('、')}（之後的關卡會解鎖，現在畫了只是普通地面）`;
   show('draw');
+  spotStart('draw');
 }
 backs.draw = () => openDeploy();
 
@@ -527,7 +568,9 @@ const fd = { paths: [], cur: null, thick: false };
 function openFinger() {
   $('finger').classList.toggle('solo-active', S.mode === 'solo');
   show('finger');
+  $('dropPreviewHint').hidden = S.mode !== 'solo';
   requestAnimationFrame(drawFinger);
+  spotStart('finger');
 }
 backs.finger = () => openDraw();
 
@@ -556,6 +599,7 @@ function drawFinger() {
   for (let y = step; y < cv.height; y += step) { ctx.moveTo(0, y); ctx.lineTo(cv.width, y); }
   ctx.stroke();
   paintPaths(ctx, cv.width, cv.height);
+  ctx.save();ctx.setTransform(cv.width/GW,0,0,cv.height/GH,0,0);drawDropMarkers(ctx);ctx.restore();
 }
 
 {
@@ -612,6 +656,7 @@ async function openAdjust(src, finger) {
   if (S.mode === 'solo') { const L = LEVELS[S.level]; soloGuide('soloAdjustGuide', 4, '最後檢查：地形有被辨識嗎？', soloLesson(L, S.level).adjust, L.task.text); }
   else $('soloAdjustGuide').hidden = true;
   show('adjust');
+  spotStart('adjust');
   await nextFrame();
   layoutCrop();
   await processCrop();
@@ -746,7 +791,7 @@ function updateStrokes() {
   adj.strokes = strokesFromImage(adj.prep, thr);
   const T = new Terrain(adj.strokes, curMechs());
   preview.setTerrain(T);
-  preview.draw([], [], 0);
+  preview.draw([], [], 0, ctx => drawDropMarkers(ctx));
   const f = T.summary();
   const chips = [];
   if (f.circles) chips.push(`<span class="chip moss">圓形 ×${f.circles} → 青苔</span>`);
