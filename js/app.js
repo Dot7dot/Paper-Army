@@ -3,6 +3,7 @@ import { UNITS, UNIT_TYPES, TERRAIN_HELP } from './units.js';
 import { Battle, DT, DURATION, unitsFromSnapshot, projFromSnapshot } from './sim.js';
 import { Renderer, TEAM, drawUnit, unitIcon, buildTerrainLayer } from './render.js';
 import { LEVELS, CHAPTERS, taskDone, taskProgress } from './levels.js';
+import { SOLO_STEPS, soloLesson } from './solo-tutorial.js';
 import { Link, cleanCode } from './net.js';
 
 const $ = (id) => document.getElementById(id);
@@ -82,6 +83,47 @@ function scaledCanvas(src, maxSide) {
 let cur = 'home';
 let armed = false;
 const backs = {};
+let soloIntroLevel = -1;
+let pendingTeachLevel = -1;
+function soloGuide(id, step, title, description, goal = '', status = '') {
+  const el = $(id);
+  const active = S.mode === 'solo';
+  el.hidden = !active;
+  if (!active) return;
+  const heading = document.createElement('h3'); heading.textContent = title;
+  const text = document.createElement('p'); text.textContent = description;
+  el.replaceChildren();
+  const label = document.createElement('span'); label.className = 'step';
+  label.textContent = `單人教學 ${step} / ${SOLO_STEPS.length}・${SOLO_STEPS[step - 1]}`;
+  el.append(label, heading, text);
+  if (goal) { const g = document.createElement('div'); g.className = 'subgoal'; g.textContent = `🎯 本關任務：${goal}`; el.appendChild(g); }
+  if (status) { const st = document.createElement('div'); st.className = 'guide-status'; st.setAttribute('role', 'status'); st.textContent = status; el.appendChild(st); }
+}
+function soloDeployUpdate() {
+  if (S.mode !== 'solo') return;
+  const L = LEVELS[S.level], count = S.place[0].length;
+  soloGuide('soloDeployGuide', 2, count ? '做得好！確認佈陣' : '先把士兵放上戰場', soloLesson(L, S.level).deploy, L.task.text,
+    count ? `✓ 已放 ${count} / ${L.slots} 隻士兵，可以繼續畫地形` : `請先點兵種，再點左側藍色區域；上限 ${L.slots} 隻`);
+}
+function soloOpenIntro() {
+  if (S.mode !== 'solo') return;
+  const L = LEVELS[S.level], lesson = soloLesson(L, S.level);
+  $('soloIntroTitle').textContent = `第 ${S.level + 1} 關・${L.name}`;
+  $('soloIntroText').textContent = lesson.intro + ' ' + L.hint;
+  $('soloIntroGoal').textContent = `🎯 額外挑戰：${lesson.task}（過關本身即可解鎖下一關）`;
+  $('soloIntro').hidden = false;
+  soloIntroLevel = S.level;
+}
+function soloCloseIntro() {
+  const wasOpen = !$('soloIntro').hidden;
+  $('soloIntro').hidden = true;
+  if (wasOpen && pendingTeachLevel === S.level && cur === 'deploy') {
+    pendingTeachLevel = -1;
+    showTeach();
+  }
+}
+$('soloIntroOk').addEventListener('click', soloCloseIntro);
+$('soloIntroSkip').addEventListener('click', soloCloseIntro);
 
 function show(id) {
   const prev = cur;
@@ -92,7 +134,7 @@ function show(id) {
   if (prev === 'battle' && id !== 'battle') stopBattle();
   if (id !== 'home' && !armed) { history.pushState({ pa: 1 }, ''); armed = true; }
 }
-function goBack() { (backs[cur] || (() => show('home')))(); }
+function goBack() { if (!$('soloIntro').hidden) { soloCloseIntro(); return; } if (!$('teach').hidden) { $('teach').hidden = true; return; } (backs[cur] || (() => show('home')))(); }
 document.querySelectorAll('.back').forEach((b) => b.addEventListener('click', goBack));
 window.addEventListener('popstate', () => {
   armed = false;
@@ -178,6 +220,9 @@ function learnText(L) {
 }
 
 function openLevels() {
+  pendingTeachLevel = -1;
+  soloIntroLevel = -1;
+  soloCloseIntro();
   S.mode = 'solo';
   const prog = loadProgress();
   const list = $('levelList');
@@ -252,19 +297,26 @@ function openDeploy() {
   $('deployTask').hidden = S.mode !== 'solo';
   $('teachBtn').hidden = !(S.mode === 'solo' && LEVELS[S.level].teach);
   $('teach').hidden = true;
+  $('deploy').classList.toggle('solo-active', S.mode === 'solo');
   // 單人模式重玩時淡淡顯示上一張地形
   const ghost = S.mode === 'solo' && S.lastStrokes[0];
   deployLayer = buildTerrainLayer(ghost ? new Terrain(S.lastStrokes[0], curMechs()) : null, { ghost: true });
   buildRoster();
   show('deploy');
   requestAnimationFrame(drawDeploy);
-  // 第一次進入這關：跳出學習卡
+  // 教學簡介在每次進入新關卡時顯示；同關反覆重試不打斷操作
+  if (S.mode === 'solo' && soloIntroLevel !== S.level) soloOpenIntro();
+  // 首次解鎖仍保留既有學習卡，但不與任務簡介同時顯示
   if (S.mode === 'solo' && LEVELS[S.level].teach) {
     const prog = loadProgress();
     if (!prog.seen.includes(S.level)) {
       prog.seen.push(S.level);
       saveProgress(prog);
-      showTeach();
+      // 首次學習卡在關閉關卡簡介後顯示
+      if (!$('soloIntro').hidden) {
+        // The learning card is deferred until the intro is dismissed.
+        pendingTeachLevel = S.level;
+      } else showTeach();
     }
   }
 }
@@ -325,6 +377,7 @@ function buildRoster() {
     <div class="stats"><span>血量 <b>${d.hp}</b></span><span>攻擊 <b>${d.atk}</b></span><span>射程 <b>${range}</b></span>
     <span>速度 <b>${d.speed}</b></span><span>爬坡 <b>${d.climb ? '垂直' : d.slope + '°'}</b></span></div>${d.trait}`;
   $('deploySlots').textContent = `${S.place[team].length} / ${deployLimit()}`;
+  soloDeployUpdate();
 }
 
 function drawDeploy() {
@@ -399,7 +452,7 @@ $('deployCanvas').addEventListener('pointerdown', (e) => {
 
 $('deployClear').addEventListener('click', () => { S.place[S.player] = []; buildRoster(); drawDeploy(); });
 $('deployNext').addEventListener('click', () => {
-  if (!S.place[S.player].length) { toast('至少放一隻兵'); return; }
+  if (!S.place[S.player].length) { toast('先選一位士兵，再點自己的藍色陣地放下士兵！', 3300); return; }
   openDraw();
 });
 window.addEventListener('resize', () => {
@@ -430,6 +483,9 @@ renderGuide($('helpGuide'));
 
 function openDraw() {
   const p = S.player;
+  $('draw').classList.toggle('solo-active', S.mode === 'solo');
+  if (S.mode === 'solo') { const L = LEVELS[S.level]; soloGuide('soloDrawGuide', 3, '現在，創造你的戰場', soloLesson(L, S.level).draw, L.task.text); }
+  else $('soloDrawGuide').hidden = true;
   $('drawTitle').textContent = S.mode === 'solo' ? '畫地形' : `玩家 ${p + 1} 畫地形`;
   if (S.mode === 'online') $('drawTitle').textContent = '畫你的地形';
   $('reuseBtn').hidden = !S.lastStrokes[p];
@@ -469,6 +525,7 @@ for (const id of ['camInput', 'pickInput']) {
 const fd = { paths: [], cur: null, thick: false };
 
 function openFinger() {
+  $('finger').classList.toggle('solo-active', S.mode === 'solo');
   show('finger');
   requestAnimationFrame(drawFinger);
 }
@@ -526,7 +583,7 @@ $('fingerPen').addEventListener('click', () => {
   $('fingerPen').textContent = fd.thick ? '細筆' : '粗筆';
 });
 $('fingerDone').addEventListener('click', async () => {
-  if (!fd.paths.length) { toast('先畫點東西吧'); return; }
+  if (!fd.paths.length) { toast('請先在紙上畫出地形；至少畫一條線才可以完成', 3200); return; }
   const c = document.createElement('canvas');
   c.width = 900; c.height = 636;
   const ctx = c.getContext('2d');
@@ -551,6 +608,9 @@ async function openAdjust(src, finger) {
   $('rotBtn').hidden = finger;
   $('retakeBtn').textContent = finger ? '重畫' : '重拍';
   $('adjustOk').textContent = S.mode === 'solo' || (S.mode === 'local' && S.player === 1) ? '開戰！' : S.mode === 'online' ? '送出地形' : '完成 ›';
+  $('adjust').classList.toggle('solo-active', S.mode === 'solo');
+  if (S.mode === 'solo') { const L = LEVELS[S.level]; soloGuide('soloAdjustGuide', 4, '最後檢查：地形有被辨識嗎？', soloLesson(L, S.level).adjust, L.task.text); }
+  else $('soloAdjustGuide').hidden = true;
   show('adjust');
   await nextFrame();
   layoutCrop();
@@ -700,6 +760,12 @@ function updateStrokes() {
   else if (ink > adj.strokes.length * 0.25) chips.push('<span class="chip">線條太多了：把閾值往右調，或剪掉紙張外的部分</span>');
   else if (!chips.length) chips.push('<span class="chip">沒有特殊形狀，只有一般地面</span>');
   $('featList').innerHTML = chips.join('');
+  if (S.mode === 'solo') {
+    const L = LEVELS[S.level];
+    const status = !ink ? '⚠ 尚未辨識到地形，請調整或重畫' : ink > adj.strokes.length * 0.25 ? '⚠ 線條可能太密集，確認預覽後再開戰' : '✓ 已辨識到地形，可以開戰！';
+    soloGuide('soloAdjustGuide', 4, '確認辨識結果', soloLesson(L, S.level).adjust, L.task.text, status);
+    $('adjustOk').disabled = !ink;
+  } else $('adjustOk').disabled = false;
 }
 
 let thrRAF = 0;
@@ -754,7 +820,8 @@ function startBattle(strokes, armies, seed, role) {
   $('speedBtn').textContent = '速度 ×1';
   $('speedBtn').style.visibility = role === 'local' ? 'visible' : 'hidden';
   $('result').hidden = true;
-  $('battleNote').textContent = S.mode === 'online' ? `你是${TEAM[S.me].name}（${S.me ? '右邊' : '左邊'}）` : '';
+  $('battleNote').textContent = S.mode === 'online' ? `你是${TEAM[S.me].name}（${S.me ? '右邊' : '左邊'}）` : S.mode === 'solo' ? '教學 5 / 5：戰鬥自動進行，觀察地形與兵種的效果' : '';
+  $('battle').classList.toggle('solo-active', S.mode === 'solo');
   show('battle');
   B.last = performance.now();
   cancelAnimationFrame(B.raf);
@@ -870,7 +937,7 @@ function showResult(res) {
         btn(learn ? `下一關：解鎖 ${learn} ›` : '下一關 ›', 'primary', () => { S.level++; S.place = [[], []]; S.lastStrokes = [null, null]; openDeploy(); });
       } else text.textContent += ' 全部關卡都過了，你是紙上名將！';
     } else {
-      text.textContent += ' 換個佈陣或地形再試試！';
+      text.textContent += ' 換個佈陣或地形再試試！失敗不會扣除已獲得的星星。';
     }
     btn('再試一次', win ? '' : 'primary', () => openDeploy());
     btn('關卡選單', 'ghost', () => openLevels());

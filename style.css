@@ -454,3 +454,75 @@ input[type="text"], input:not([type]), input[inputmode] {
   .bar { padding-top: 6px; }
   .foot { padding-top: 6px; padding-bottom: 8px; }
 }
+
+
+/* ===== 單人闖關・清楚、可操作的新手引導 ===== */
+.solo-intro, .solo-guide {
+  border: 3px solid var(--ink);
+  border-radius: 16px;
+  padding: 14px 16px;
+  background: #fff7d6;
+  box-shadow: 4px 4px 0 var(--ink);
+  margin: 8px 0 16px;
+  line-height: 1.6;
+}
+.solo-intro { display: grid; gap: 4px; }
+.solo-intro strong, .solo-guide h3 { font-size: clamp(19px, 4.5vw, 23px); font-weight: 900; margin: 0; line-height: 1.35; }
+.solo-intro span { font-size: 16px; font-weight: 700; }
+.solo-guide { display: grid; gap: 9px; }
+.solo-guide .step { font-size: 13px; font-weight: 900; letter-spacing: .08em; color: var(--blue); }
+.solo-guide p { margin: 0; font-size: clamp(17px, 4vw, 20px); font-weight: 800; line-height: 1.6; }
+.solo-guide .subgoal { background: #fff; border-left: 5px solid var(--blue); padding: 8px 10px; font-size: 16px; font-weight: 800; }
+.solo-guide .guide-status { font-size: 16px; font-weight: 900; color: #205a28; }
+.solo-intro-modal { position: fixed; z-index: 45; }
+.solo-intro-modal .modal-card { width: min(100%, 480px); gap: 14px; padding: 22px; }
+.solo-intro-modal h2 { margin: 0; font-size: clamp(26px, 6vw, 34px); font-weight: 900; }
+.solo-intro-modal p { font-size: 19px; font-weight: 750; line-height: 1.65; margin: 0; }
+.solo-intro-modal .task-line { font-size: 18px; font-weight: 900; margin: 0; }
+#deploy.solo-active .note, #draw.solo-active .note { font-size: 17px; font-weight: 700; }
+#deploy.solo-active .task-line { font-size: 16px; }
+#deploy.solo-active .task-line small { font-size: 13px; font-weight: 700; }
+#deploy.solo-active .unit-btn { min-height: 82px; }
+#deploy.solo-active .unit-btn .nm { font-size: 17px; font-weight: 900; }
+#deploy.solo-active .unit-btn .tp { font-size: 13px; font-weight: 700; }
+#deploy.solo-active .unit-info { font-size: 16px; font-weight: 700; }
+#deploy.solo-active .unit-info h4 { font-size: 19px; font-weight: 900; }
+#deploy.solo-active .stats { font-size: 14px; }
+#deploy.solo-active .small, #draw.solo-active .small, #adjust.solo-active .small { font-size: 15px; font-weight: 700; }
+.solo-active .btn.primary { font-size: 19px; font-weight: 900; min-height: 52px; }
+.solo-active .g-item h4 { font-size: 17px; font-weight: 900; }
+.solo-active .g-item p { font-size: 15px; font-weight: 650; }
+.solo-active .slider { font-size: 16px; font-weight: 900; }
+.solo-active .slider .ends { font-size: 13px; font-weight: 700; }
+.solo-active .chip { font-size: 15px; font-weight: 800; }
+.solo-active .bar h2 { font-size: 21px; font-weight: 900; }
+.solo-active .toast { font-size: 17px; }
+.level .num { font-size: 15px; font-weight: 900; color: #514b43; }
+.level .name { font-size: 20px; font-weight: 900; }
+.level .meta, .level .learn { font-size: 14px; font-weight: 800; }
+.chapter h3 { font-size: 20px; font-weight: 900; }
+.chapter span { font-size: 14px; font-weight: 700; }
+#teach .teach-item { align-items: flex-start; }
+#teach .teach-item h4 { font-size: 21px; font-weight: 900; }
+#teach .teach-item p { font-size: 17px; font-weight: 700; }
+#teach .small { font-size: 16px; font-weight: 700; }
+#teach .modal-card { width: min(100%, 460px); }
+#teach .btn { font-size: 18px; font-weight: 900; }
+.btn:focus-visible, .level:focus-visible, .unit-btn:focus-visible {
+  outline: 4px solid var(--blue); outline-offset: 3px;
+}
+@media (max-width: 380px) {
+  .solo-guide { padding: 10px 12px; }
+  .solo-guide p { font-size: 17px; }
+  .bar { gap: 5px; }
+}
+@media (orientation: landscape) and (max-height: 520px) {
+  #deploy.solo-active .body {
+    grid-template-areas: "guide guide" "note note" "task task" "arena roster" "tip info";
+  }
+  #deploy #soloDeployGuide { grid-area: guide; }
+  .solo-guide { margin: 4px 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .solo-intro-modal, .solo-intro-modal .modal-card { animation: none; }
+}

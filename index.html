@@ -38,7 +38,7 @@
 <!-- 關卡選擇 -->
 <section id="levels" class="screen">
   <header class="bar"><button class="back" aria-label="返回">‹</button><h2>單人闖關</h2></header>
-  <div class="body"><div id="levelList" class="level-list"></div></div>
+  <div class="body"><div class="solo-intro"><strong>從第一關開始，逐步學會佈陣、畫地形與自動戰鬥。</strong><span>每一關都能查看提示；通關後自動解鎖下一關。</span></div><div id="levelList" class="level-list"></div></div>
 </section>
 
 <!-- 連線大廳 -->
@@ -62,6 +62,7 @@
 <section id="deploy" class="screen">
   <header class="bar"><button class="back" aria-label="返回">‹</button><h2 id="deployTitle">佈陣</h2><button id="teachBtn" class="pill pill-btn" hidden>學習卡</button><span id="deploySlots" class="pill"></span></header>
   <div class="body">
+    <div id="soloDeployGuide" class="solo-guide" hidden></div>
     <p id="deployHint" class="note"></p>
     <div id="deployTask" class="task-line" hidden></div>
     <div class="arena"><canvas id="deployCanvas"></canvas></div>
@@ -84,6 +85,7 @@
   <header class="bar"><button class="back" aria-label="返回">‹</button><h2 id="drawTitle">畫地形</h2></header>
   <div class="body">
     <p class="note">拿一張 A4 或任何淺色的紙<b>橫放</b>，用深色的筆畫出地形，再拍下來。紙的下緣是地面，線條碰到下緣，下面就會變成實心的山。</p>
+    <div id="soloDrawGuide" class="solo-guide" hidden></div>
     <div id="terrainGuide" class="guide"></div>
     <p id="guideLocked" class="small" hidden></p>
   </div>
@@ -118,6 +120,7 @@
 <section id="adjust" class="screen">
   <header class="bar"><button class="back" aria-label="返回">‹</button><h2>確認地形</h2></header>
   <div class="body">
+    <div id="soloAdjustGuide" class="solo-guide" hidden></div>
     <div id="cropWrap" class="crop-wrap"><canvas id="cropCanvas"></canvas></div>
     <div class="adjust-tools">
       <button class="btn small-btn" id="rotBtn" aria-label="旋轉">↻ 旋轉</button>
@@ -164,7 +167,7 @@
   <p class="rotate-hint">↻ 把手機橫放，戰場會更大</p>
   <div class="battle-bar">
     <button class="btn small-btn" id="speedBtn">速度 ×1</button>
-    <span id="battleNote" class="small"></span>
+    <span id="battleNote" class="small" role="status"></span>
     <button class="btn small-btn ghost" id="quitBtn">離開</button>
   </div>
   <div id="result" class="result" hidden>
@@ -196,6 +199,7 @@
   </div>
 </section>
 
+<div id="soloIntro" class="modal solo-intro-modal" hidden role="dialog" aria-modal="true" aria-labelledby="soloIntroTitle"><div class="modal-card"><span class="teach-tag">新手任務</span><h2 id="soloIntroTitle">先認識這一關</h2><p id="soloIntroText"></p><div id="soloIntroGoal" class="task-line"></div><button id="soloIntroOk" class="btn primary big">我準備好了，開始佈陣！</button><button id="soloIntroSkip" class="btn ghost">直接開始</button></div></div>
 <div id="busy" class="busy" hidden><div class="spinner"></div></div>
 <div id="toast" class="toast"></div>
 </body>
