@@ -126,7 +126,7 @@ function show(id) {
   if (prev === 'battle' && id !== 'battle') stopBattle();
   if (id !== 'home' && !armed) { history.pushState({ pa: 1 }, ''); armed = true; }
 }
-function goBack() { (backs[cur] || (() => show('home')))(); }
+function goBack() { if (!$('soloIntro').hidden) { soloCloseIntro(); return; } if (!$('teach').hidden) { $('teach').hidden = true; return; } (backs[cur] || (() => show('home')))(); }
 document.querySelectorAll('.back').forEach((b) => b.addEventListener('click', goBack));
 window.addEventListener('popstate', () => {
   armed = false;
@@ -212,6 +212,7 @@ function learnText(L) {
 }
 
 function openLevels() {
+  soloIntroLevel = -1;
   soloCloseIntro();
   S.mode = 'solo';
   const prog = loadProgress();
@@ -288,7 +289,6 @@ function openDeploy() {
   $('teachBtn').hidden = !(S.mode === 'solo' && LEVELS[S.level].teach);
   $('teach').hidden = true;
   $('deploy').classList.toggle('solo-active', S.mode === 'solo');
-  soloDeployUpdate();
   // 單人模式重玩時淡淡顯示上一張地形
   const ghost = S.mode === 'solo' && S.lastStrokes[0];
   deployLayer = buildTerrainLayer(ghost ? new Terrain(S.lastStrokes[0], curMechs()) : null, { ghost: true });
@@ -445,7 +445,7 @@ $('deployCanvas').addEventListener('pointerdown', (e) => {
 
 $('deployClear').addEventListener('click', () => { S.place[S.player] = []; buildRoster(); drawDeploy(); });
 $('deployNext').addEventListener('click', () => {
-  if (!S.place[S.player].length) { toast('至少放一隻兵'); return; }
+  if (!S.place[S.player].length) { toast('先選一位士兵，再點自己的藍色陣地放下士兵！', 3300); return; }
   openDraw();
 });
 window.addEventListener('resize', () => {
@@ -576,7 +576,7 @@ $('fingerPen').addEventListener('click', () => {
   $('fingerPen').textContent = fd.thick ? '細筆' : '粗筆';
 });
 $('fingerDone').addEventListener('click', async () => {
-  if (!fd.paths.length) { toast('先畫點東西吧'); return; }
+  if (!fd.paths.length) { toast('請先在紙上畫出地形；至少畫一條線才可以完成', 3200); return; }
   const c = document.createElement('canvas');
   c.width = 900; c.height = 636;
   const ctx = c.getContext('2d');
