@@ -84,6 +84,7 @@ let cur = 'home';
 let armed = false;
 const backs = {};
 let soloIntroLevel = -1;
+let pendingTeachLevel = -1;
 function soloGuide(id, step, title, description, goal = '', status = '') {
   const el = $(id);
   const active = S.mode === 'solo';
@@ -113,7 +114,14 @@ function soloOpenIntro() {
   $('soloIntro').hidden = false;
   soloIntroLevel = S.level;
 }
-function soloCloseIntro() { $('soloIntro').hidden = true; }
+function soloCloseIntro() {
+  const wasOpen = !$('soloIntro').hidden;
+  $('soloIntro').hidden = true;
+  if (wasOpen && pendingTeachLevel === S.level && cur === 'deploy') {
+    pendingTeachLevel = -1;
+    showTeach();
+  }
+}
 $('soloIntroOk').addEventListener('click', soloCloseIntro);
 $('soloIntroSkip').addEventListener('click', soloCloseIntro);
 
@@ -212,6 +220,7 @@ function learnText(L) {
 }
 
 function openLevels() {
+  pendingTeachLevel = -1;
   soloIntroLevel = -1;
   soloCloseIntro();
   S.mode = 'solo';
@@ -295,7 +304,7 @@ function openDeploy() {
   buildRoster();
   show('deploy');
   requestAnimationFrame(drawDeploy);
-  // 教學簡介每次新選關卡顯示；同關反覆重試則不打斷操作
+  // 教學簡介在每次進入新關卡時顯示；同關反覆重試不打斷操作
   if (S.mode === 'solo' && soloIntroLevel !== S.level) soloOpenIntro();
   // 首次解鎖仍保留既有學習卡，但不與任務簡介同時顯示
   if (S.mode === 'solo' && LEVELS[S.level].teach) {
@@ -305,10 +314,8 @@ function openDeploy() {
       saveProgress(prog);
       // 首次學習卡在關閉關卡簡介後顯示
       if (!$('soloIntro').hidden) {
-        const openCard = () => { $('soloIntroOk').removeEventListener('click', openCard); $('soloIntroSkip').removeEventListener('click', openCard); if (cur === 'deploy' && S.level === levelForCard) showTeach(); };
-        const levelForCard = S.level;
-        $('soloIntroOk').addEventListener('click', openCard);
-        $('soloIntroSkip').addEventListener('click', openCard);
+        // The learning card is deferred until the intro is dismissed.
+        pendingTeachLevel = S.level;
       } else showTeach();
     }
   }
