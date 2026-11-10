@@ -526,3 +526,15 @@ input[type="text"], input:not([type]), input[inputmode] {
 @media (prefers-reduced-motion: reduce) {
   .solo-intro-modal, .solo-intro-modal .modal-card { animation: none; }
 }
+
+.solo-spotlight{position:fixed;inset:0;z-index:900;pointer-events:none}
+.spot-shade{position:absolute;inset:0;background:#101624b8;pointer-events:none}
+.spot-target{position:relative!important;z-index:901!important;border-radius:12px;box-shadow:0 0 0 5px #ffe07a,0 0 32px 12px #f8c742!important;background:var(--card)}
+.spot-card{position:absolute;z-index:902;bottom:calc(14px + var(--safe-b));left:50%;transform:translateX(-50%);width:min(92vw,480px);padding:15px 18px;background:#fffdf5;border:3px solid #f3c444;border-radius:18px;box-shadow:0 10px 45px #0009;pointer-events:auto}
+.spot-card h2{font-size:clamp(21px,5vw,27px);font-weight:900;margin:7px 0}
+.spot-card p{font-size:17px;line-height:1.5;font-weight:750;margin:8px 0 12px}
+.spot-count{font-size:14px;font-weight:900;color:#805900}
+.spot-actions{display:flex;gap:10px;justify-content:space-between}
+.spot-actions .btn{font-weight:850;min-height:44px}
+.drop-preview-hint{font-size:16px;font-weight:850;line-height:1.5;background:#e9f0ff;border:2px solid #6187d7;padding:10px;border-radius:12px}
+@media(max-height:650px){.spot-card{bottom:6px;padding:9px 12px}.spot-card p{font-size:15px;margin:5px 0}}

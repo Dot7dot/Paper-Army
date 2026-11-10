@@ -106,6 +106,7 @@
   <header class="bar"><button class="back" aria-label="返回">‹</button><h2>用手指畫地形</h2></header>
   <div class="body">
     <div class="arena paper-edge"><canvas id="fingerCanvas"></canvas></div>
+    <p id="dropPreviewHint" class="drop-preview-hint" hidden>🔵 藍色虛線與箭頭＝我軍從上方降落的位置；🔴 紅色＝敵軍。畫線時可直接參考落點。</p>
     <p class="small">畫的時候想像這是一張橫放的紙：下緣是地面。</p>
   </div>
   <footer class="foot">
@@ -199,7 +200,8 @@
   </div>
 </section>
 
-<div id="soloIntro" class="modal solo-intro-modal" hidden role="dialog" aria-modal="true" aria-labelledby="soloIntroTitle"><div class="modal-card"><span class="teach-tag">新手任務</span><h2 id="soloIntroTitle">先認識這一關</h2><p id="soloIntroText"></p><div id="soloIntroGoal" class="task-line"></div><button id="soloIntroOk" class="btn primary big">我準備好了，開始佈陣！</button><button id="soloIntroSkip" class="btn ghost">直接開始</button></div></div>
+<div id="soloSpotlight" class="solo-spotlight" hidden role="dialog" aria-modal="false" aria-labelledby="spotTitle"><div class="spot-shade"></div><div class="spot-card"><span id="spotCount" class="spot-count"></span><h2 id="spotTitle"></h2><p id="spotText"></p><div class="spot-actions"><button id="spotSkip" class="btn ghost">略過引導</button><button id="spotNext" class="btn primary">下一步 ›</button></div></div></div>
+  <div id="soloIntro" class="modal solo-intro-modal" hidden role="dialog" aria-modal="true" aria-labelledby="soloIntroTitle"><div class="modal-card"><span class="teach-tag">新手任務</span><h2 id="soloIntroTitle">先認識這一關</h2><p id="soloIntroText"></p><div id="soloIntroGoal" class="task-line"></div><button id="soloIntroOk" class="btn primary big">我準備好了，開始佈陣！</button><button id="soloIntroSkip" class="btn ghost">直接開始</button></div></div>
 <div id="busy" class="busy" hidden><div class="spinner"></div></div>
 <div id="toast" class="toast"></div>
 </body>
